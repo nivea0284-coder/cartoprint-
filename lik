@@ -1,0 +1,83 @@
+CONVERSÃO UTM 
+
+from pyproj import Transformer
+
+def utm_para_geo(x, y, zona=23, hemisferio="S"):
+    epsg_utm = 31983 if hemisferio == "S" else 31977
+    transformer = Transformer.from_crs(
+        f"EPSG:{epsg_utm}",
+        "EPSG:4326",
+        always_xy=True
+    )
+    lon, lat = transformer.transform(x, y)
+    return lat, lon
+import csv
+import folium
+import webbrowser
+from pyproj import Transformer
+
+# ================= CONVERSÃO =================
+def utm_para_geo(x, y):
+    transformer = Transformer.from_crs(
+        "EPSG:31983",  # SIRGAS 2000 / UTM 23S
+        "EPSG:4326",
+        always_xy=True
+    )
+    lon, lat = transformer.transform(x, y)
+    return lat, lon
+
+
+# ================= CLASSES =================
+class Coordenada:
+    def __init__(self, nome):
+        self.nome = nome
+
+
+class CoordenadaGeografica(Coordenada):
+    def __init__(self, nome, lat, lon):
+        super().__init__(nome)
+        self.lat = lat
+        self.lon = lon
+
+
+class CoordenadaPlana(Coordenada):
+    def __init__(self, nome, x, y):
+        super().__init__(nome)
+        self.x = x
+        self.y = y
+        self.lat, self.lon = utm_para_geo(x, y)
+
+
+# ================= LEITURA CSV =================
+lista = []
+
+with open("coordenadas.csv", newline="", encoding="utf-8") as arq:
+    leitor = csv.DictReader(arq)
+    for linha in leitor:
+        if linha["tipo"] == "geografica":
+            c = CoordenadaGeografica(
+                linha["nome"],
+                float(linha["lat"]),
+                float(linha["long"])
+            )
+        else:
+            c = CoordenadaPlana(
+                linha["nome"],
+                float(linha["x"]),
+                float(linha["y"])
+            )
+        lista.append(c)
+
+
+# ================= MAPA =================
+mapa = folium.Map(location=[-15, -55], zoom_start=4)
+
+for c in lista:
+    folium.Marker(
+        location=[c.lat, c.lon],
+        popup=c.nome,
+        icon=folium.Icon(color="green")
+    ).add_to(mapa)
+
+mapa.save("mapa_final.html")
+webbrowser.open("mapa_final.html")
