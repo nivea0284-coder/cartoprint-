@@ -1,0 +1,303 @@
+import pandas as pd
+import folium
+import math
+from IPython.display import display
+from google.colab import files
+import ipywidgets as widgets
+
+# ==========================================
+# CLASSE BASE (HERANÇA)
+# ==========================================
+
+class SistemaBase:
+
+    def exportar(self, nome):
+        print("Método exportar da classe base.")
+
+    def importar(self, nome):
+        print("Método importar da classe base.")
+
+
+# ==========================================
+# CLASSE PRINCIPAL
+# ==========================================
+
+class CartoPoint(SistemaBase):
+
+    def __init__(self):
+        self.dados = pd.DataFrame(columns=["Nome", "Latitude", "Longitude"])
+
+
+    def adicionar_ponto(self, nome, lat, lon):
+
+        novo = {
+            "Nome": nome,
+            "Latitude": float(lat),
+            "Longitude": float(lon)
+        }
+
+        self.dados = pd.concat(
+            [self.dados, pd.DataFrame([novo])],
+            ignore_index=True
+        )
+
+        print("Ponto adicionado com sucesso!")
+
+
+    def mostrar_dados(self):
+
+        if self.dados.empty:
+            print("Nenhum dado cadastrado.")
+        else:
+            display(self.dados)
+
+
+    def gerar_mapa(self):
+
+        if self.dados.empty:
+            print("Nenhum dado cadastrado.")
+            return None
+
+        mapa = folium.Map(
+            location=[
+                self.dados["Latitude"].mean(),
+                self.dados["Longitude"].mean()
+            ],
+            zoom_start=5
+        )
+
+        for _, linha in self.dados.iterrows():
+
+            folium.Marker(
+                [linha["Latitude"], linha["Longitude"]],
+                popup=linha["Nome"]
+            ).add_to(mapa)
+
+        return mapa
+
+
+    def calcular_distancia(self, i1, i2):
+
+        if i1 not in self.dados.index or i2 not in self.dados.index:
+            print("Índice inválido.")
+            return
+
+        lat1 = math.radians(self.dados.loc[i1, "Latitude"])
+        lon1 = math.radians(self.dados.loc[i1, "Longitude"])
+        lat2 = math.radians(self.dados.loc[i2, "Latitude"])
+        lon2 = math.radians(self.dados.loc[i2, "Longitude"])
+
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+
+        a = math.sin(dlat/2)**2 + \
+            math.cos(lat1) * math.cos(lat2) * \
+            math.sin(dlon/2)**2
+
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+        distancia = 6371 * c
+
+        print(f"Distância: {distancia:.3f} km")
+
+
+    def excluir_por_indice(self, indice):
+
+        if indice in self.dados.index:
+
+            nome = self.dados.loc[indice, "Nome"]
+
+            self.dados = self.dados.drop(indice).reset_index(drop=True)
+
+            print(f"Ponto '{nome}' excluído!")
+
+        else:
+            print("Índice inválido.")
+
+
+    def excluir_por_nome(self, nome):
+
+        if nome in self.dados["Nome"].values:
+
+            self.dados = self.dados[self.dados["Nome"] != nome].reset_index(drop=True)
+
+            print(f"Ponto '{nome}' excluído!")
+
+        else:
+            print("Nome não encontrado.")
+
+
+    # POLIMORFISMO
+    def exportar(self, nome):
+
+        if nome.endswith(".csv"):
+            self.exportar_csv(nome)
+
+        elif nome.endswith(".json"):
+            self.exportar_json(nome)
+
+        else:
+            print("Formato não suportado.")
+
+
+    def importar(self, nome):
+
+        if nome.endswith(".csv"):
+            self.importar_csv(nome)
+
+        elif nome.endswith(".json"):
+            self.importar_json(nome)
+
+        else:
+            print("Formato não suportado.")
+
+
+    def exportar_csv(self, nome="dados.csv"):
+
+        if self.dados.empty:
+            print("Nenhum dado para exportar.")
+            return
+
+        self.dados.to_csv(nome, index=False)
+
+        files.download(nome)
+
+        print("Download CSV iniciado!")
+
+
+    def exportar_json(self, nome="dados.json"):
+
+        if self.dados.empty:
+            print("Nenhum dado para exportar.")
+            return
+
+        self.dados.to_json(nome, orient="records", indent=4)
+
+        files.download(nome)
+
+        print("Download JSON iniciado!")
+
+
+    def importar_csv(self, nome):
+
+        self.dados = pd.read_csv(nome)
+
+        print("CSV importado com sucesso!")
+
+        display(self.dados)
+
+
+    def importar_json(self, nome):
+
+        self.dados = pd.read_json(nome)
+
+        print("JSON importado com sucesso!")
+
+        display(self.dados)
+
+
+# ==========================================
+# CRIAR SISTEMA
+# ==========================================
+
+carto = CartoPoint()
+
+
+# ==========================================
+# INTERFACE
+# ==========================================
+
+nome = widgets.Text(description="Nome")
+lat = widgets.Text(description="Latitude")
+lon = widgets.Text(description="Longitude")
+
+indice1 = widgets.IntText(description="Índice 1")
+indice2 = widgets.IntText(description="Índice 2")
+
+indice_excluir = widgets.IntText(description="Excluir índice")
+nome_excluir = widgets.Text(description="Excluir nome")
+
+
+# BOTÕES
+
+btn_add = widgets.Button(description="Adicionar ponto", button_style='success')
+btn_show = widgets.Button(description="Mostrar dados")
+btn_map = widgets.Button(description="Gerar mapa", button_style='info')
+btn_dist = widgets.Button(description="Calcular distância")
+btn_excluir_i = widgets.Button(description="Excluir por índice")
+btn_excluir_n = widgets.Button(description="Excluir por nome")
+btn_csv = widgets.Button(description="Exportar CSV")
+btn_json = widgets.Button(description="Exportar JSON")
+
+
+# ==========================================
+# FUNÇÕES DOS BOTÕES
+# ==========================================
+
+def adicionar(b):
+    carto.adicionar_ponto(nome.value, lat.value.replace(",", "."), lon.value.replace(",", "."))
+
+def mostrar(b):
+    carto.mostrar_dados()
+
+def mapa(b):
+    display(carto.gerar_mapa())
+
+def distancia(b):
+    carto.calcular_distancia(indice1.value, indice2.value)
+
+def excluir_indice(b):
+    carto.excluir_por_indice(indice_excluir.value)
+
+def excluir_nome(b):
+    carto.excluir_por_nome(nome_excluir.value)
+
+def export_csv(b):
+    carto.exportar("dados.csv")
+
+def export_json(b):
+    carto.exportar("dados.json")
+
+
+# CONECTAR BOTÕES
+
+btn_add.on_click(adicionar)
+btn_show.on_click(mostrar)
+btn_map.on_click(mapa)
+btn_dist.on_click(distancia)
+btn_excluir_i.on_click(excluir_indice)
+btn_excluir_n.on_click(excluir_nome)
+btn_csv.on_click(export_csv)
+btn_json.on_click(export_json)
+
+
+# ==========================================
+# MONTAR INTERFACE
+# ==========================================
+
+display(
+widgets.VBox([
+widgets.HTML("<h2>Sistema CartoPoint</h2>"),
+
+nome,
+lat,
+lon,
+btn_add,
+
+btn_show,
+btn_map,
+
+indice1,
+indice2,
+btn_dist,
+
+indice_excluir,
+btn_excluir_i,
+
+nome_excluir,
+btn_excluir_n,
+
+btn_csv,
+btn_json
+])
+)
